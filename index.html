@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset='utf-8'>
+    <title>Smoke Stacks</title>
+    <script src='https://d3js.org/d3.v7.min.js'></script>
+</head>
+
+<body>
+    <script>
+        // Load the data from the JSON file
+        d3.json('noe_air_quality.json')
+            .then(function (response) {
+                // Extract the data from the JSON response
+                const data = new Array();
+
+                Object.keys(response).forEach(function (key) {
+                    data.push({
+                        region: key,
+                        ozone: response[key].ozone,
+                        pm10: response[key].pm10,
+                    })
+                });
+
+
+                // Select the SVG container
+                const svg = d3.select('body')
+                    .append('svg')
+                    .attr('viewBox', [0, 0, window.innerWidth, window.innerHeight])
+                    .attr('preserveAspectRatio', 'xMidYMid meet')
+                    .attr('fill', 'black')
+                    .attr('width', window.innerWidth)
+                    .attr('height', window.innerHeight);
+
+                // calculate the standard deviation of the ozone measurements
+                const oDeviation = d3.deviation(data, function (d) {
+                    return d3.deviation(d.ozone.measurements.filter(d => d > 0));
+                });
+
+                const pDeviation = d3.deviation(data, function (d) {
+                    return d3.deviation(d.pm10.measurements.filter(d => d > 0));
+                });
+
+                
+                // get the extent of all ozone measurements
+                let oMin = d3.min(data, function (d) {
+                    return d3.min(d.ozone.measurements.filter(d => d > 0));
+                });
+
+                let oMax = d3.max(data, function (d) {
+                    return d3.max(d.ozone.measurements.filter(d => d > 0));
+                });
+
+                // get the mean of all ozone measurements
+                let oMean = d3.mean(data, function (d) {
+                    return d3.mean(d.ozone.measurements.filter(d => d > 0));
+                });
+
+                const oExtent = [oMin, oMax];
+
+                // replace negative values in measurements with a random number between the extent using standard deviation
+                data.forEach(d => {
+                    d.ozone.measurements = d.ozone.measurements.map(m => {
+                        if (m < 0) {
+                            const previousValueIndex = d.ozone.measurements.indexOf(m) - 1;
+                            const previousValue = d.ozone.measurements[previousValueIndex];
+                            // check if previous value exists
+                            if (previousValue < 0) {
+                                console.log('no previous value');
+                                return oMean + ((oDeviation * Math.random() * oMin) * ( Math.random() > 0.5 ? 1 : -1));
+                            }
+                            return previousValue + (oDeviation * 3 * (Math.random() > 0.5 ? 1 : -1));
+                        }
+                        return m;
+                    });
+                });
+
+                // get the extent of all pm10 measurements
+                // get the min and max value of all pm10 measurements excluding negative values
+                let pMin = d3.min(data, function (d) {
+                    return d3.min(d.pm10.measurements.filter(d => d > 0));
+                });
+
+                let pMax = d3.max(data, function (d) {
+                    return d3.max(d.pm10.measurements.filter(d => d > 0));
+                });
+                 // get the mean of all ozone measurements
+                let pMean = d3.mean(data, function (d) {
+                    return d3.mean(d.pm10.measurements.filter(d => d > 0));
+                });
+                const pExtent = [pMin, pMax];
+
+                // replace negative values in measurements with a random number between the extent using standard deviation
+                data.forEach(d => {
+                    d.pm10.measurements = d.pm10.measurements.map(m => {
+                        if (m < 0) {
+                            const previousValueIndex = d.pm10.measurements.indexOf(m) - 1;
+                            const previousValue = d.pm10.measurements[previousValueIndex];
+                            // check if previous value exists
+                            if (previousValue < 0) {
+                                console.log('no previous value');
+                                return pMean + ((pDeviation * Math.random() * pMin) * ( Math.random() > 0.5 ? 1 : -1));
+                            }
+                            return previousValue + (pDeviation * 3 * (Math.random() > 0.5 ? 1 : -1));
+                        }
+                        return m;
+                    });
+                });
+
+                // create squarerootscale for ozone
+                const oScale = d3.scaleLinear()
+                    .domain(oExtent)
+                    .range([5, 20]);
+
+                // create squarerootscale for pm10
+                const pScale = d3.scaleLinear()
+                    .domain(pExtent)
+                    .range([5, 20]);
+
+                console.log(oScale.domain(), oScale.range());
+                console.log(pScale.domain(), pScale.range());
+
+                // replace the scaleMeasurements per data point with the new scales
+                data.forEach(d => {
+                    d.ozone.scaledMeasurements = d.ozone.measurements.map(m => oScale(m));
+                    d.pm10.scaledMeasurements = d.pm10.measurements.map(m => pScale(m));
+                });
+
+
+                const labels = svg.selectAll('.labels');
+
+                const fdata = data.filter(d => !['NK', 'ME', 'LF', 'KO', 'HO'].includes(d.region));
+
+                labels.data(fdata)
+                    .enter()
+                    .append('text')
+                    .attr('class', 'labels')
+                    .attr('text-anchor', 'middle')
+                    .attr('font-size', '20px')
+                    .attr('fill', 'black')
+                    .attr('text-align', 'center')
+                    .attr('x', function (d, i) {
+                        return (i * 100 + 150);
+                    })
+                    .attr('y', function (d) {
+                        return 60;
+                    })
+                    .text(function (d) {
+                        return d.region;
+                    });
+
+                // Iterate over the data and draw circles for each region and measurement
+                fdata.forEach((d, i) => {
+                    const g = svg.append('g')
+                        .attr('id', d.region);
+
+                    g.attr('transform', 'translate(' + (i * 100 + 100) + ', 0)');
+
+                    g.selectAll('.o-stacks')
+                        .data(d.ozone.measurements)
+                        .enter()
+                        .append('circle')
+                        .attr('class', 'o-stacks')
+                        .attr('fill', 'black')
+                        .attr('cx', function (d, j) {
+                            return (i + 20);
+                        })
+                        .attr('cy', function (d, j) {
+                            return (j * 50) + 100;
+                        })
+                        .attr('r', function (d) {
+                            console.log(d, oScale(d));
+                            return oScale(d);
+                        });
+
+                    g.selectAll('.p-stacks')
+                        .data(d.pm10.measurements)
+                        .enter()
+                        .append('circle')
+                        .attr('class', 'p-stacks')
+                        .attr('fill', 'gray')
+                        .attr('cx', function (d, j) {
+                            return (i + 50);
+                        })
+                        .attr('cy', function (d, j) {
+                            return (j * 50) + 100;
+                        })
+                        .attr('r', function (d) {
+                            return pScale(d);
+                        });
+                });
+                // Add a download button to grab the data in a JSON file
+                const downloadButton = document.createElement('button');
+                downloadButton.innerText = 'Download Data';
+                downloadButton.addEventListener('click', function() {
+                    const dataStr = JSON.stringify(data.filter(d => !['NK', 'ME', 'LF', 'KO', 'HO'].includes(d.region)));
+                    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = dataUri;
+                    downloadLink.download = 'data.json';
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink);
+                });
+                document.body.appendChild(downloadButton);
+            });
+
+    </script>
+</body>
+
+</html>
